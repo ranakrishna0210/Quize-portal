@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz Portal</title>
+    <style>
+        body { 
+            margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #020617; color: #ffffff; display: flex; height: 100vh; 
+        }
+
+        #login-overlay { 
+            position: fixed; inset: 0; background: #020617; z-index: 100; 
+            display: flex; align-items: center; justify-content: center; 
+        }
+        .login-card { 
+            background: #1e293b; padding: 40px; border-radius: 20px; 
+            text-align: center; width: 350px; border: 1px solid #334155; 
+        }
+        .btn { 
+            width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; 
+            border: none; cursor: pointer; font-weight: bold; font-size: 14px;
+        }
+
+        #sidebar { 
+            width: 240px; background: #09090b; border-right: 1px solid #334155; 
+            display: none; flex-direction: column; padding: 25px; 
+        }
+        .nav-link { 
+            padding: 12px; color: #94a3b8; cursor: pointer; border-radius: 8px; 
+            margin-bottom: 8px; transition: 0.3s; 
+        }
+        .nav-link:hover { background: #1e293b; color: #38bdf8; }
+
+        main { flex: 1; padding: 40px; overflow-y: auto; display: none; }
+        .page { display: none; max-width: 900px; margin: 0 auto; }
+        .active { display: block; }
+
+        .card { 
+            background: #1e293b; padding: 20px; border-radius: 15px; 
+            margin-bottom: 20px; border: 1px solid #334155; 
+        }
+        input { 
+            width: 95%; padding: 10px; margin: 8px 0; border-radius: 6px; 
+            border: 1px solid #334155; background: #0f172a; color: white; 
+        }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
+        
+        .option-tile { 
+            background: #334155; padding: 15px; border-radius: 10px; 
+            margin-bottom: 10px; cursor: pointer; 
+        }
+        .option-tile:hover { background: #38bdf8; color: #000; }
+    </style>
+</head>
+<body>
+
+    <div id="login-overlay">
+        <div class="login-card">
+            <h1 style="color: #38bdf8;">Quiz Portal</h1>
+            <p style="color: #94a3b8;">Online Quiz System</p>
+
+            <button class="btn" style="background: #a855f7; color: white;" onclick="setRole('teacher')">TEACHER PORTAL</button>
+            <button class="btn" style="background: #22c55e; color: white;" onclick="setRole('student')">STUDENT PORTAL</button>
+            
+            <div id="email-section" style="display:none; margin-top: 25px;">
+                <input type="email" id="email-field" placeholder="Enter Gmail Address">
+                <button class="btn" style="background: white; color: black;" onclick="startSession()">Sign in with Google</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <h2 style="color: #38bdf8;">QUIZ PORTAL</h2>
+        <div class="nav-link" onclick="goTo('home')">🏠 Home</div>
+        <div id="teacher-menu" style="display:none;">
+            <div class="nav-link" onclick="goTo('create')">➕ Create Quiz</div>
+            <div class="nav-link" onclick="goTo('results')">👥 Student Results</div>
+        </div>
+        <div class="nav-link" onclick="goTo('history')">📜 My History</div>
+        <div class="nav-link" style="margin-top:auto; color: #ef4444;" onclick="location.reload()">Logout</div>
+    </div>
+
+    <main id="main-view">
+        
+        <div id="home" class="page active">
+            <h1>Active Quiz Modules</h1>
+            <div id="quiz-list-area"></div>
+        </div>
+
+        <div id="create" class="page">
+            <h1>New Quiz Architect</h1>
+            <div class="card">
+                <input type="text" id="qz-title" placeholder="Enter Quiz Name">
+                <input type="number" id="qz-time" placeholder="Time Limit (Minutes)">
+                <div id="questions-container"></div>
+                <button class="btn" onclick="newQuestion()">+ Add Question</button>
+                <button class="btn" style="background:#38bdf8; color:black;" onclick="deployQuiz()">Publish</button>
+            </div>
+        </div>
+
+        <div id="results" class="page">
+            <h1>Class Performance</h1>
+            <div id="results-display"></div>
+        </div>
+
+        <div id="history" class="page">
+            <h1>Your History</h1>
+            <div id="history-display"></div>
+        </div>
+
+        <div id="reg-form" class="page">
+            <div class="card" style="max-width: 400px; margin: auto;">
+                <h2>Enter Details</h2>
+                <input type="text" id="std-fullname" placeholder="Full Name">
+                <input type="text" id="std-rollno" placeholder="Roll Number">
+                <button class="btn" style="background:#38bdf8; color:black;" onclick="confirmIdentity()">Start Quiz</button>
+            </div>
+        </div>
+
+        <div id="player" class="page">
+            <h2 id="current-quiz-name"></h2>
+            <div id="clock"></div>
+            <div id="question-area"></div>
+        </div>
+
+    </main>
+
+<script>
+ let role = "";
+        let userEmail = "";
+        let quizzes = JSON.parse(localStorage.getItem("quizzes_db")) || [];
+        let submissions = JSON.parse(localStorage.getItem("results_db")) || [];
+        let activeQuizData = null;
+        let timer;
+
+        function setRole(r) {
+            role = r;
+            document.getElementById('email-section').style.display = 'block';
+        }
+
+        function startSession() {
+            userEmail = document.getElementById('email-field').value;
+            if (!userEmail) return alert("Email Required");
+            
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('sidebar').style.display = 'flex';
+            document.getElementById('main-view').style.display = 'block';
+
+            if (role === 'teacher') document.getElementById('teacher-menu').style.display = 'block';
+            goTo('home');
+        }
+
+        function goTo(pageId) {
+            let p = document.getElementsByClassName('page');
+            for (let i = 0; i < p.length; i++) p[i].classList.remove('active');
+            document.getElementById(pageId).classList.add('active');
+
+            if (pageId === 'home') renderQuizzes();
+            if (pageId === 'results') renderTeacherResults();
+            if (pageId === 'history') renderStudentHistory();
+        }
+
+        function newQuestion() {
+            let container = document.getElementById('questions-container');
+            let qId = Date.now();
+            let div = document.createElement('div');
+            div.className = "card";
+            div.style.background = "#0f172a";
+            div.innerHTML = `
+                <input type="text" class="q-val" placeholder="Type Question Here">
+                <div style="margin-top:10px;">
+                    <input type="radio" name="r_${qId}" checked class="ans-check"> <input type="text" class="opt-val" placeholder="Option 1 (Correct)"><br>
+                    <input type="radio" name="r_${qId}" class="ans-check"> <input type="text" class="opt-val" placeholder="Option 2"><br>
+                    <input type="radio" name="r_${qId}" class="ans-check"> <input type="text" class="opt-val" placeholder="Option 3"><br>
+                    <input type="radio" name="r_${qId}" class="ans-check"> <input type="text" class="opt-val" placeholder="Option 4">
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function deployQuiz() {
+            let title = document.getElementById('qz-title').value;
+            let time = document.getElementById('qz-time').value;
+            let questions = [];
+            let qNodes = document.getElementsByClassName('q-val');
+            let optNodes = document.getElementsByClassName('opt-val');
+            let checks = document.getElementsByClassName('ans-check');
+
+            for (let i = 0; i < qNodes.length; i++) {
+                let options = [optNodes[i*4].value, optNodes[i*4+1].value, optNodes[i*4+2].value, optNodes[i*4+3].value];
+                let correct = "";
+                for(let j=0; j<4; j++) { if(checks[i*4+j].checked) correct = optNodes[i*4+j].value; }
+                questions.push({ text: qNodes[i].value, options, answer: correct });
+            }
+
+            quizzes.push({ id: Date.now(), title, time, questions });
+            localStorage.setItem("quizzes_db", JSON.stringify(quizzes));
+            alert("Quiz Deployed!");
+            goTo('home');
+        }
+
+        function renderQuizzes() {
+            let area = document.getElementById('quiz-list-area');
+            area.innerHTML = "";
+            quizzes.forEach(q => {
+                area.innerHTML += `
+                    <div class="card">
+                        <h3>${q.title}</h3>
+                        <p style="color:#94a3b8">${q.questions.length} Questions | ${q.time} Mins</p>
+                        <button class="btn" style="background:#38bdf8; color:black; width:auto; padding:10px 30px;" onclick="attemptQuiz(${q.id})">Attempt</button>
+                    </div>
+                `;
+            });
+        }
+
+        function attemptQuiz(id) {
+            let duplicate = submissions.find(s => s.quizId === id && s.email === userEmail);
+            if (duplicate) return alert("You have already completed this quiz. Check 'My History'.");
+            
+            activeQuizData = quizzes.find(q => q.id === id);
+            goTo('reg-form');
+        }
+
+        let tempUser = {};
+        function confirmIdentity() {
+            tempUser.name = document.getElementById('std-fullname').value;
+            tempUser.roll = document.getElementById('std-rollno').value;
+            if (!tempUser.name || !tempUser.roll) return alert("Complete the form!");
+
+            goTo('player');
+            idx = 0; currentScore = 0;
+            displayQ();
+            startTimer(activeQuizData.time);
+        }
+
+        let idx = 0; let currentScore = 0;
+        function displayQ() {
+            let area = document.getElementById('question-area');
+            if (idx >= activeQuizData.questions.length) return endSession();
+
+            let q = activeQuizData.questions[idx];
+            document.getElementById('current-quiz-name').innerText = activeQuizData.title;
+            area.innerHTML = `<h3 style="margin-bottom:20px;">${q.text}</h3>`;
+            q.options.forEach(opt => {
+                let div = document.createElement('div');
+                div.className = "option-tile"; div.innerText = opt;
+                div.onclick = function() {
+                    if (opt === q.answer) currentScore++;
+                    idx++; displayQ();
+                };
+                area.appendChild(div);
+            });
+        }
+
+        function startTimer(m) {
+            let sec = m * 60;
+            clearInterval(timer);
+            timer = setInterval(() => {
+                let displayM = Math.floor(sec / 60);
+                let displayS = sec % 60;
+                document.getElementById('clock').innerText = displayM + ":" + (displayS < 10 ? "0" + displayS : displayS);
+                if (sec <= 0) endSession();
+                sec--;
+            }, 1000);
+        }
+
+        function endSession() {
+            clearInterval(timer);
+            let percent = Math.round((currentScore / activeQuizData.questions.length) * 100);
+            submissions.push({
+                quizId: activeQuizData.id,
+                quizTitle: activeQuizData.title,
+                email: userEmail,
+                name: tempUser.name,
+                roll: tempUser.roll,
+                score: percent
+            });
+            localStorage.setItem("results_db", JSON.stringify(submissions));
+            alert("Exam Finished! Score: " + percent + "%");
+            goTo('history');
+        }
+
+        function renderTeacherResults() {
+            let area = document.getElementById('results-display');
+            area.innerHTML = "";
+            quizzes.forEach(q => {
+                let myResults = submissions.filter(s => s.quizId === q.id);
+                let rows = myResults.map(s => `
+                    <tr><td>${s.roll}</td><td>${s.name}</td><td>${s.email}</td><td>${s.score}%</td></tr>
+                `).join('');
+
+                area.innerHTML += `
+                    <div class="card">
+                        <h3>${q.title}</h3>
+                        <table>
+                            <tr><th>Roll No</th><th>Student Name</th><th>Email</th><th>Result</th></tr>
+                            ${rows}
+                        </table>
+                    </div>
+                `;
+            });
+        }
+
+        function renderStudentHistory() {
+            let area = document.getElementById('history-display');
+            area.innerHTML = "";
+            let myLogs = submissions.filter(s => s.email === userEmail);
+            myLogs.forEach(l => {
+                area.innerHTML += `
+                    <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h3 style="margin:0;">${l.quizTitle}</h3>
+                            <small style="color:#94a3b8">Attempted by: ${l.name}</small>
+                        </div>
+                        <h2 style="color:#38bdf8; margin:0;">${l.score}%</h2>
+                    </div>
+                `;
+            });
+        }
+</script>
+
+</body>
+</html>
